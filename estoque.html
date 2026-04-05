@@ -299,7 +299,7 @@ function getPH(cid,pid){return history.filter(h=>h.cid===cid&&h.pid===pid&&h.tip
 function monthlyMap(cid,pid){const m={};getPH(cid,pid).forEach(h=>{const k=monthKey(h.ts);m[k]=(m[k]||0)+h.qtd;});return m;}
 function avgC(cid,pid,months){const m=monthlyMap(cid,pid);const now=new Date();let tot=0,cnt=0;for(let i=0;i<months;i++){const d=new Date(now.getFullYear(),now.getMonth()-i,1);const k=monthKey(d.getTime());if(m[k]!==undefined){tot+=m[k];cnt++;}}return cnt===0?null:tot/cnt;}
 function slopeC(cid,pid,months){const m=monthlyMap(cid,pid);const now=new Date();const pts=[];for(let i=months-1;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);const k=monthKey(d.getTime());if(m[k]!==undefined)pts.push({x:months-1-i,y:m[k]});}if(pts.length<2)return 0;const n=pts.length,sx=pts.reduce((a,p)=>a+p.x,0),sy=pts.reduce((a,p)=>a+p.y,0),sxy=pts.reduce((a,p)=>a+p.x*p.y,0),sx2=pts.reduce((a,p)=>a+p.x*p.x,0);return(n*sxy-sx*sy)/(n*sx2-sx*sx);}
-function effC(cid,pid){const a=avgC(cid,pid,12);if(a===null)return null;const s=slopeC(cid,pid,6);return Math.max(a,a+(s>0?s*3:0));}
+function effC(cid,pid){return avgC(cid,pid,12);}
 function getConsumo(cid,pid){const e=effC(cid,pid);return e!==null?e:findP(cid,pid).consumoBase;}
 function calcMin(c){return Math.ceil(c*1.25*1.3);}
 function getMin(cid,pid){return calcMin(getConsumo(cid,pid));}
@@ -351,7 +351,7 @@ window.render=function(filter){
       const tBadge=hasData?(sl6>1?'<span class="badge up">↑ crescendo</span>':'<span class="badge stable">estável</span>'):'';
       const ep=totalEmProd(p);
       const proxChegada=(p.emProducao||[]).filter(o=>o.chegada).sort((a,b)=>a.chegada.localeCompare(b.chegada))[0];
-      const projCell=ep>0?`<div class="prod-proj">+${ep.toLocaleString('pt-BR')} em prod.</div>${proxChegada?`<div class="prod-chegada">chega ~${fmtDate(proxChegada.chegada)}</div>`:''}`:'';
+      const projCell=ep>0?`<div class="prod-proj">+${ep.toLocaleString('pt-BR')} em prod.</div>${proxChegada?`<div class="prod-chegada">chega ~${fmtDate(proxChegada.chegada)}</div>`:'`}`:'';
       return`<tr>
         <td><div class="prod-nome">${p.nome}</div><div class="prod-medida">${p.medida}</div></td>
         <td><div class="prod-cell"><span class="qtd-num ${qc}">${p.qtd.toLocaleString('pt-BR')}</span>${projCell}</div></td>
@@ -484,17 +484,16 @@ function renderAnalytics(){
   for(let i=aPeriod-1;i>=0;i--){const d=new Date(dn.getFullYear(),dn.getMonth()-i,1);const k=monthKey(d.getTime());months.push({k,label:d.toLocaleString('pt-BR',{month:'short',year:'2-digit'}),val:map[k]||0,real:map[k]!==undefined,proj:false});}
   const sl=slopeC(aCid,aPid,aPeriod);const av=avgC(aCid,aPid,aPeriod);
   const realMths=months.filter(m=>m.real);
-  const lastV=realMths.length>0?realMths[realMths.length-1].val:(av||p.consumoBase);
-  for(let i=1;i<=2;i++){const d=new Date(dn.getFullYear(),dn.getMonth()+i,1);months.push({k:monthKey(d.getTime()),label:d.toLocaleString('pt-BR',{month:'short',year:'2-digit'}),val:Math.max(0,Math.round(lastV+(sl>0?sl*i:0))),real:false,proj:true});}
+  }
   const maxV=Math.max(...months.map(m=>m.val),1);
   document.getElementById('aBarChart').innerHTML=months.map(m=>`<div class="bar-col"><div class="bar ${m.proj?'proj':''}" style="height:${Math.round((m.val/maxV)*100)}px" data-tip="${m.val} unid.${m.proj?' (projeção)':''}"></div><div class="bar-label">${m.label}${m.proj?'*':''}</div></div>`).join('');
-  document.getElementById('aChartTitle').textContent=`Consumo mensal${!realMths.length?' (sem dados reais ainda)':''} · * projeção`;
-  const eff=effC(aCid,aPid)||p.consumoBase;const minD=calcMin(eff);
+  document.getElementById('aChartTitle').textContent=`Consumo mensal${!realMths.length?' (sem dados reais ainda)':''}`;
+  const consumoMedio=effC(aCid,aPid);const eff=consumoMedio!==null?Math.round(consumoMedio):p.consumoBase;const minD=calcMin(eff);
   document.getElementById('aMetrics').innerHTML=`
     <div class="a-met"><div class="lbl">Média real (${aPeriod}m)</div><div class="val">${av!==null?Math.round(av):'-'} unid.</div></div>
     <div class="a-met"><div class="lbl">Tendência mensal</div><div class="val ${sl>1?'up':'ok'}">${sl>0?'+':''}${r1(sl)} unid./mês</div></div>
     <div class="a-met"><div class="lbl">Mínimo recomendado</div><div class="val">${minD} unid.</div></div>`;
-  document.getElementById('aMinInfo').innerHTML=`<strong>Como o mínimo foi calculado:</strong><br>Consumo efetivo: <strong>${Math.round(eff)} unid./mês</strong>${sl>1?` (média ${Math.round(av||0)} + buffer de crescimento)`:''}× prazo 1,25 meses × segurança 1,3 = <strong>${minD} unid.</strong>${!realMths.length?'<br><em style="color:var(--text3)">Registre pedidos para cálculo com dados reais.</em>':''}`;
+  document.getElementById('aMinInfo').innerHTML=`<strong>Como o mínimo foi calculado:</strong><br>Consumo médio: <strong>${eff} unid./mês</strong><br>Mínimo = ${eff} × 1,25 meses × 1,3 segurança = <strong>${minD} unid.</strong>${!realMths.length?'<br><em style="color:var(--text3)">Registre pedidos para cálculo com dados reais.</em>':''}`;
 }
 
 // ── MISC ──────────────────────────────────────────────────────────────────────
